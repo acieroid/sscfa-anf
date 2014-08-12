@@ -1,0 +1,11 @@
+Requires ocamlgraph and batteries:
+  $ opam install ocamlgraph batteries
+
+To compile:
+  $ make
+
+To run:
+  $ ./dsg.byte
+
+To view the result:
+  $ dot -Tpng dsg.dot > dsg.png
