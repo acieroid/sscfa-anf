@@ -162,7 +162,7 @@ sig
   val inject : exp -> conf
   (* the frame list argument is the list of the potential frames that reside on
      the top of the stack, not the stack itself *)
-  val step : conf -> (conf * frame) list -> (stack_change * conf) list
+  val step : conf -> (conf * frame) option -> (stack_change * conf) list
 end
 
 module ANFStructure =
@@ -348,7 +348,7 @@ module ANFStackSummary =
 
     (* let add_ss ss = List.map (fun (g, state) -> (g, (state, ss))) *)
 
-    let step (state, ss) frames = match state with
+    let step (state, ss) frame = match state with
       | (Call (f, ae), env, store) ->
         (* was: add_ss ss (ANFNoStackSummary.step state frames) *)
         let rands = atomic_eval f env store in
@@ -364,13 +364,16 @@ module ANFStackSummary =
         let k = (v, e, env) in
         [(StackPush k, ((Call call, env, store), (Summary.push ss k)))]
       | (Atom ae, env, store) ->
-        List.map
-          (fun ((_, ss'), (v, e, env')) ->
-             let a = alloc v state in
-             let env'' = Env.extend env' v a in
-             let store' = Store.join store a (atomic_eval ae env store) in
-             (StackPop (v, e, env'), ((e, env'', store'), ss')))
-          frames
+        begin match frame with
+          | Some ((_, ss'), (v, e, env')) ->
+            let a = alloc v state in
+            let env'' = Env.extend env' v a in
+            let store' = Store.join store a (atomic_eval ae env store) in
+            [StackPop (v, e, env'), ((e, env'', store'), ss')]
+          | None ->
+            print_endline "No frame when popping, reached final state";
+            []
+        end
 
     module ConfOrdering = struct
       type t = conf
@@ -380,15 +383,11 @@ module ANFStackSummary =
 
 module ANFGarbageCollected =
 struct
-
   include ANFStructure
 
-
   (* TODO
-
      module ANF = ANFStackSummary(ReachableAddressesSummary)
      include ANF
-
   *)
 
   module AddressSet = BatSet.Make(Address)
@@ -405,7 +404,7 @@ struct
   let inject e =
     ((e, Env.empty, Store.empty), Summary.empty)
 
-  let step_no_gc (state, ss) frames = match state with
+  let step_no_gc (state, ss) frame = match state with
     | (Call (f, ae), env, store) ->
       let rands = atomic_eval f env store in
       let rator = atomic_eval ae env store in
@@ -420,13 +419,16 @@ struct
       let k = (v, e, env) in
       [(StackPush k, ((Call call, env, store), (Summary.push ss k)))]
     | (Atom ae, env, store) ->
-      List.map
-        (fun ((_, ss'), (v, e, env')) ->
-           let a = alloc v state in
-           let env'' = Env.extend env' v a in
-           let store' = Store.join store a (atomic_eval ae env store) in
-           (StackPop (v, e, env'), ((e, env'', store'), ss')))
-        frames
+      begin match frame with
+        | Some ((_, ss'), (v, e, env')) ->
+          let a = alloc v state in
+          let env'' = Env.extend env' v a in
+          let store' = Store.join store a (atomic_eval ae env store) in
+          [(StackPop (v, e, env'), ((e, env'', store'), ss'))]
+        | None ->
+          print_endline "No frame when popping, reached end of evaluation";
+          []
+      end
 
   module ConfOrdering = struct
     type t = conf
@@ -478,7 +480,7 @@ struct
     let ((exp, env, store), ss) = conf in
     ((exp, env, Store.restrict store (AddressSet.to_list (reachable conf))), ss)
 
-  let step conf frames = step_no_gc (gc conf) frames
+  let step conf = step_no_gc (gc conf)
 
 end
 
@@ -574,7 +576,7 @@ module BuildDSG =
                       | (L.StackPop k', c2) when L.FrameOrdering.compare k k' == 0 ->
                         EdgeSet.add (c', L.StackPop k, c2) acc
                       | _ -> acc)
-                     EdgeSet.empty (L.step c' [(c, k)]))
+                     EdgeSet.empty (L.step c' (Some (c, k))))
              | _ -> acc)
           dsg.g EdgeSet.empty in
       let ds = EdgeSet.fold (fun (c1, g, c2) acc -> match g with
@@ -607,7 +609,7 @@ module BuildDSG =
                if L.ConfOrdering.compare c_ c' == 0 then
                  let c2s = List.filter (fun (g', c2) -> match g' with
                      | L.StackPop k' -> L.FrameOrdering.compare k k' == 0
-                     | _ -> false) (L.step c1 [(c1, k)]) in
+                     | _ -> false) (L.step c1 (Some (c1, k))) in
                  List.fold_left (fun acc (g, c2) -> EdgeSet.add (c1, g, c2) acc)
                    acc c2s
                else
@@ -651,7 +653,7 @@ module BuildDSG =
          EpsSet.filter (fun (c1, c2) -> not (G.mem_edge dsg.ecg c1 c2)) dh)
 
     let explore dsg c =
-      let stepped = L.step c [] in
+      let stepped = L.step c None in
       let ds = (List.fold_left
                   (fun set (_, conf) -> ConfSet.add conf set)
                   ConfSet.empty stepped)
