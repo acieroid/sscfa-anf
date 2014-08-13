@@ -709,15 +709,26 @@ module L = ANFGarbageCollected
 module DSG = BuildDSG(L)
 
 let _ =
-(*let exp =  (L.Let ("id", (L.Lambda ("x", L.Atom (L.Var "x")),
+(*  let exp =  (L.Let ("id", (L.Lambda ("x", L.Atom (L.Var "x")),
                             L.Lambda ("y", L.Atom (L.Var "y"))),
                      (L.Call ((L.Lambda ("z", L.Atom (L.Var "z"))), L.Var "id")))) in
-  let dsg = DSG.build_dyck exp in *)
+  let dsg = DSG.build_dyck exp in
+
   let id = L.Lambda ("x", L.Atom (L.Var "x")) in
   let y = (L.Lambda ("f", (L.Call (L.Lambda ("x", L.Let ("y", (L.Var "x", L.Var "x"),
                                                          L.Call (L.Var "f", L.Var "y"))),
                                    L.Lambda ("x", L.Let ("y", (L.Var "x", L.Var "x"),
                                                          L.Call (L.Var "f", L.Var "y"))))))) in
-  let dsg = DSG.build_dyck (L.Call (y, id)) in
+  let dsg = DSG.build_dyck (L.Call (y, id)) in *)
 
+  let exp = (L.Let ("f", (L.Lambda ("x", L.Atom (L.Var "x")),
+                          L.Lambda ("x", L.Atom (L.Var "x"))),
+                    (L.Let ("g", (L.Lambda ("y", L.Atom (L.Var "y")),
+                                  L.Var "f"),
+                            (L.Let ("h", (L.Lambda ("z", L.Atom (L.Var "z")),
+                                          L.Var "g"),
+                                    (L.Let ("a", (L.Var "f", L.Var "g"),
+                                            (L.Call (L.Var "a", L.Var "h")))))))))) in
+
+  let dsg = DSG.build_dyck exp in
   DSG.output_dsg dsg "dsg.dot"
