@@ -602,7 +602,8 @@ module BuildDSG =
 
     let add_edge dsg c g c' = match g with
       | L.StackUnchanged ->
-        add_short { dsg with ecg = G.add_edge dsg.ecg c c' } c c'
+        let (ds, de, dh) = add_short { dsg with ecg = G.add_edge dsg.ecg c c' } c c' in
+        (ds, de, EpsSet.add (c, c') dh)
       | L.StackPush k ->
         let de = G.fold_edges
             (fun c_ c1 acc ->
