@@ -81,27 +81,27 @@ end
 
 module SetLattice =
   functor (V : BatInterfaces.OrderedType) ->
-struct
-  module VSet = BatSet.Make(V)
-  type elt = V.t
-  type t =
-    | Top
-    | Set of VSet.t
-  let bot = Set VSet.empty
-  let top = Top
-  let join x y = match x, y with
-  | Top, _ | _, Top -> Top
-  | Set a, Set b -> Set (VSet.union a b)
-  let abst l = Set (List.fold_left (fun s el -> VSet.add el s) VSet.empty l)
-  let concretize = function
-    | Top -> failwith "too abstracted"
-    | Set s -> VSet.elements s
-  let compare x y = match x, y with
-    | Top, Top -> 0
-    | Top, _ -> 1
-    | _, Top -> -1
-    | Set a, Set b -> VSet.compare a b
-end
+  struct
+    module VSet = BatSet.Make(V)
+    type elt = V.t
+    type t =
+      | Top
+      | Set of VSet.t
+    let bot = Set VSet.empty
+    let top = Top
+    let join x y = match x, y with
+      | Top, _ | _, Top -> Top
+      | Set a, Set b -> Set (VSet.union a b)
+    let abst l = Set (List.fold_left (fun s el -> VSet.add el s) VSet.empty l)
+    let concretize = function
+      | Top -> failwith "too abstracted"
+      | Set s -> VSet.elements s
+    let compare x y = match x, y with
+      | Top, Top -> 0
+      | Top, _ -> 1
+      | _, Top -> -1
+      | Set a, Set b -> VSet.compare a b
+  end
 
 module type Store_signature =
   functor (L : Lattice_signature) ->
@@ -111,7 +111,7 @@ module type Store_signature =
     val empty : t
     val join : t -> A.t -> L.t -> t
     val lookup : t -> A.t -> L.t
-   (* Keep only addresses in the given list *)
+    (* Keep only addresses in the given list *)
     val restrict : t -> A.t list -> t
     val compare : t -> t -> int
     val size : t -> int
@@ -132,13 +132,11 @@ module MapStore : Store_signature =
     let lookup store a = AddrMap.find a store
     let restrict store addrs =
       AddrMap.filter (fun a _ ->
-          if (List.mem a addrs) then begin
-            print_string ("reclaim(" ^ (A.to_string a) ^ ")");
-            print_newline ();
+          if (List.mem a addrs) then
             true
-          end
-          else
-            false) store
+          else begin
+            print_endline ("reclaim(" ^ (A.to_string a) ^ ")");
+            false end) store
     let compare = AddrMap.compare L.compare
     let size = AddrMap.cardinal
   end
@@ -707,23 +705,24 @@ module BuildDSG =
         (ConfSet.singleton c0) EdgeSet.empty EpsSet.empty
   end
 
-(* module L = ANFStackSummary(ReachableAddressesSummary) *)
+(* module LNoGC = ANFStackSummary(EmptyStackSummary) *)
 module L = ANFGarbageCollected
+(* module DSG = BuildDSG(LNoGC) *)
 module DSG = BuildDSG(L)
 
 let _ =
-(*  let exp =  (L.Let ("id", (L.Lambda ("x", L.Atom (L.Var "x")),
-                            L.Lambda ("y", L.Atom (L.Var "y"))),
-                     (L.Call ((L.Lambda ("z", L.Atom (L.Var "z"))), L.Var "id")))) in
-  let dsg = DSG.build_dyck exp in
-
-  let id = L.Lambda ("x", L.Atom (L.Var "x")) in
-  let y = (L.Lambda ("f", (L.Call (L.Lambda ("x", L.Let ("y", (L.Var "x", L.Var "x"),
-                                                         L.Call (L.Var "f", L.Var "y"))),
-                                   L.Lambda ("x", L.Let ("y", (L.Var "x", L.Var "x"),
-                                                         L.Call (L.Var "f", L.Var "y"))))))) in
-  let dsg = DSG.build_dyck (L.Call (y, id)) in *)
-
+  (* let exp =  (L.Let ("id", (L.Lambda ("x", L.Atom (L.Var "x")),
+                              L.Lambda ("y", L.Atom (L.Var "y"))),
+                       (L.Call ((L.Lambda ("z", L.Atom (L.Var "z"))), L.Var "id")))) in
+     let dsg = DSG.build_dyck exp in *)
+  (*  let id = L.Lambda ("x", L.Atom (L.Var "x")) in
+      let y = (L.Lambda ("f", (L.Call (L.Lambda ("x", L.Let ("y", (L.Var "x", L.Var "x"),
+                                                           L.Call (L.Var "f", L.Var "y"))),
+                                     L.Lambda ("x", L.Let ("y", (L.Var "x", L.Var "x"),
+                                                           L.Call (L.Var "f", L.Var "y"))))))) in
+      let dsg = DSG.build_dyck (L.Call (y, id)) in
+  *)
+(*
   let exp = (L.Let ("f", (L.Lambda ("x", L.Atom (L.Var "x")),
                           L.Lambda ("x", L.Atom (L.Var "x"))),
                     (L.Let ("g", (L.Lambda ("y", L.Atom (L.Var "y")),
@@ -731,7 +730,14 @@ let _ =
                             (L.Let ("h", (L.Lambda ("z", L.Atom (L.Var "z")),
                                           L.Var "g"),
                                     (L.Let ("a", (L.Var "f", L.Var "g"),
-                                            (L.Call (L.Var "a", L.Var "h")))))))))) in
+                                            (L.Call (L.Var "a", L.Var "h")))))))))) in *)
+
+  let exp = (L.Let ("f", (L.Lambda ("a", L.Atom (L.Var "a")),
+                          L.Lambda ("x", L.Atom (L.Var "x"))),
+                    (L.Let ("g", (L.Lambda ("a", L.Atom (L.Var "a")),
+                                  L.Lambda ("y", (L.Call (L.Var "f", L.Var "y")))),
+                            (L.Call (L.Var "g", L.Var "f")))))) in
 
   let dsg = DSG.build_dyck exp in
-  DSG.output_dsg dsg "dsg.dot"
+  DSG.output_dsg dsg "dsg.dot";
+  DSG.output_ecg dsg "ecg.dot"
