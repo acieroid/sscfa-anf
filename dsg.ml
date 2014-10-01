@@ -79,7 +79,8 @@ sig
   val compare : t -> t -> int
 end
 
-module SetLattice =
+module SetLattice : functor (V : BatInterfaces.OrderedType)
+  -> Lattice_signature with type elt = V.t =
   functor (V : BatInterfaces.OrderedType) ->
   struct
     module VSet = BatSet.Make(V)
@@ -439,8 +440,7 @@ struct
       vars AddressSet.empty
 
   let root (((e, env, store), ss) : conf) =
-    (* TODO: Obj.magic *)
-    AddressSet.union (Obj.magic ss) (addresses_of_vars (free e) env)
+    AddressSet.union ss (addresses_of_vars (free e) env)
 
   let touch (lam, env) =
     addresses_of_vars (free (Atom (Lambda lam))) env
